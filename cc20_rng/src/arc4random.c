@@ -4,22 +4,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <pthread.h>
-#include <sys/mman.h>
-#include <sys/random.h>
-
 #include <monocypher.h>
 
 #include "arc4random.h"
+#include "arc4random_private.h"
 
-#define RNG_POOL_SIZE 768
-#define CHACHA20_KEY_SIZE 32
-#define RNG_SEED_SIZE CHACHA20_KEY_SIZE
-
-struct RngCtx {
-  uint8_t pool[RNG_POOL_SIZE];
-  size_t index;
-};
+void a4r_explicit_bzero(void *b, size_t len) { crypto_wipe(b, len); }
 
 static void rng_init(struct RngCtx *ctx,
                      const uint8_t seed[CHACHA20_KEY_SIZE]) {
@@ -51,87 +41,12 @@ static void rng_read(struct RngCtx *ctx, size_t bufsz, void *buf) {
     ctx->index += sz;
   }
 
-  crypto_wipe(&ctx->pool[CHACHA20_KEY_SIZE], ctx->index - CHACHA20_KEY_SIZE);
-}
-
-struct a4r_rng {
-  struct RngCtx rng;
-  unsigned char is_seeded;
-};
-
-static struct a4r_rng *a4r_rng_new(void) {
-  struct a4r_rng *res = mmap(NULL, sizeof *res, PROT_READ | PROT_WRITE,
-                             MAP_ANON | MAP_PRIVATE, -1, 0);
-
-  if (res == MAP_FAILED)
-    return NULL;
-
-  madvise(res, sizeof *res, MADV_WIPEONFORK);
-  mlock(res, sizeof *res);
-  res->is_seeded = 0;
-
-  return res;
-}
-
-static struct a4r_globals {
-  struct a4r_rng *global_rng;
-  pthread_mutex_t lock;
-  bool is_initialized;
-  pthread_key_t tlocal_key;
-} a4r_globals = {.lock = PTHREAD_MUTEX_INITIALIZER, .is_initialized = false};
-
-static void a4r_rng_destroy(void *d);
-
-static int a4r_init_global(void) {
-  pthread_mutex_lock(&a4r_globals.lock);
-
-  if (!a4r_globals.is_initialized) {
-    a4r_globals.global_rng = a4r_rng_new();
-    if (a4r_globals.global_rng == NULL)
-      return -1;
-
-    pthread_key_create(&a4r_globals.tlocal_key, a4r_rng_destroy);
-
-    a4r_globals.is_initialized = true;
-  }
-
-  pthread_mutex_unlock(&a4r_globals.lock);
-  return 0;
-}
-
-static void a4r_rng_destroy(void *d) {
-  struct a4r_rng *r = d;
-  crypto_wipe(r, sizeof *r);
-
-  madvise(r, sizeof *r, MADV_KEEPONFORK);
-  munlock(r, sizeof *r);
-
-  munmap(r, sizeof *r);
-}
-
-static struct a4r_rng *a4r_rng_get(void) {
-  struct a4r_rng *rng = pthread_getspecific(a4r_globals.tlocal_key);
-  if (rng != NULL)
-    return rng;
-
-  rng = a4r_rng_new();
-  if (rng != NULL) {
-    pthread_setspecific(a4r_globals.tlocal_key, rng);
-    return rng;
-  }
-
-  pthread_mutex_lock(&a4r_globals.lock);
-  return a4r_globals.global_rng;
-}
-
-static void a4r_rng_put(struct a4r_rng *r) {
-  if (r == a4r_globals.global_rng)
-    pthread_mutex_unlock(&a4r_globals.lock);
+  a4r_explicit_bzero(&ctx->pool[CHACHA20_KEY_SIZE], ctx->index - CHACHA20_KEY_SIZE);
 }
 
 static int a4r_rng_stir(struct a4r_rng *r) {
   unsigned char seed[RNG_SEED_SIZE];
-  if (getentropy(seed, sizeof seed) == -1)
+  if (a4r_getentropy(seed, sizeof seed) == -1)
     return -1;
 
   rng_init(&r->rng, seed);

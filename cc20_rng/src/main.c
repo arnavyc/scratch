@@ -1,5 +1,5 @@
-#include "dbg.h"
 #include "arc4random.h"
+#include "dbg.h"
 
 int main(void) {
   unsigned char buf[1024];
