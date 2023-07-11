@@ -13,11 +13,10 @@
 
 int ay_uuid_generate_v4(uint8_t out_uuid[AY_UUID_NUM_BYTES]);
 int ay_uuid_generate_v7(uint8_t out_uuid[AY_UUID_NUM_BYTES]);
-void ay_uuid_to_string(const uint8_t *uuid, char *out_str);
+void ay_uuid_to_string(const uint8_t uuid[AY_UUID_NUM_BYTES], char *out_str);
 
-#ifdef AY_GETDELIM_IMPLEMENTATION
+#ifdef AY_UUID_IMPLEMENTATION
 #include <assert.h>
-#include <stdio.h>
 #include <time.h>
 
 #include <sys/random.h>
@@ -63,7 +62,7 @@ int ay_uuid_generate_v7(uint8_t out_uuid[AY_UUID_NUM_BYTES]) {
   return AY_UUID_INFO_OK;
 }
 
-void ay_uuid_to_string(const uint8_t *uuid, char *out_str) {
+void ay_uuid_to_string(const uint8_t uuid[AY_UUID_NUM_BYTES], char *out_str) {
   static const char DIGITS[] = "0123456789abcdef";
 
   for (int i = 0, j = 0; i < 16; i++) {
@@ -75,19 +74,6 @@ void ay_uuid_to_string(const uint8_t *uuid, char *out_str) {
       out_str[j++] = '-';
   }
   out_str[AY_UUID_NUM_CHARS - 1] = '\0';
-}
-
-int main(int argc, char *argv[]) {
-  uint8_t uuid[AY_UUID_NUM_BYTES];
-  char uuid_str[AY_UUID_NUM_CHARS];
-
-  ay_uuid_generate_v4(uuid);
-  ay_uuid_to_string(uuid, uuid_str);
-  printf("UUIDv4: %s\n", uuid_str);
-
-  ay_uuid_generate_v7(uuid);
-  ay_uuid_to_string(uuid, uuid_str);
-  printf("UUIDv7: %s\n", uuid_str);
 }
 
 #endif /* AY_UUID_IMPLEMENTATION */
